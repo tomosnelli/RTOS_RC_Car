@@ -1,6 +1,6 @@
-# 🎮 Arduino RC Car Project 🚘
+# 🎮 Raspberry Pi Pico RC Car Project 🚘
 
-This repository contains all the details and resources for a cutting-edge, custom-built Arduino-based RC Car. This project symbolizes my fervor for constructing hardware and architecting intelligent software. 🧠💡
+This repository contains all the details and resources for a cutting-edge, custom-built Raspberry Pi Pico-based RC Car. This project symbolizes my fervor for constructing hardware and architecting intelligent software. 🧠💡
 
 ---
 
@@ -22,7 +22,7 @@ Here are the vital physical components involved in the construction of the RC ca
 We're harnessing the power of advanced software tools for this RC car:
 
 - **FreeRTOS**: This open-source real-time operating system for embedded devices ensures efficiency and rapid responsiveness. ⚡
-- **Arduino PWM library**: Crucial for regulating Pulse Width Modulation, which effectively controls the speed of the car. 🎛
+- **Raspberry Pi Pico-SDK**: Crucial for regulating Pulse Width Modulation, which effectively controls the speed of the car. 🎛
 
 ---
 
