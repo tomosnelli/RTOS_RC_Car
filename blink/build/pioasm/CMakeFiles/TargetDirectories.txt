@@ -1,0 +1,3 @@
+/home/tom/RTOS_RC_Car/blink/build/pioasm/CMakeFiles/pioasm.dir
+/home/tom/RTOS_RC_Car/blink/build/pioasm/CMakeFiles/edit_cache.dir
+/home/tom/RTOS_RC_Car/blink/build/pioasm/CMakeFiles/rebuild_cache.dir
