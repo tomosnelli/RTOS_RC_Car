@@ -2,3 +2,6 @@
 	path = FreeRTOS-Kernel
 	url = git@github.com:tomosnelli/FreeRTOS-Kernel.git
 	branch = smp
+[submodule "pico-sdk"]
+	path = pico-sdk
+	url = git@github.com:tomosnelli/pico-sdk.git
