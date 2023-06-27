@@ -7,16 +7,26 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#define ENA_PIN 13
-#define IN1_PIN 12
-#define IN2_PIN 11
+#define ENA_PIN 2
+#define IN1_PIN 1
+#define IN2_PIN 0
 
 void motor_init(){
+    //init gpio
+    gpio_init(ENA_PIN);
     gpio_init(IN1_PIN);
     gpio_init(IN2_PIN);
 
+    //set gpio pin directions
+    gpio_set_dir(ENA_PIN, GPIO_OUT);
     gpio_set_dir(IN1_PIN, GPIO_OUT);
     gpio_set_dir(IN2_PIN, GPIO_OUT);
+
+    gpio_put(IN1_PIN, 0);
+    gpio_put(IN2_PIN, 0);
+
+    // enable the motor by setting the ENA pin hight
+    gpio_put(ENA_PIN, 1);
 
 /*
     gpio_set_function(ENA_PIN, GPIO_FUNC_PWM);
@@ -25,9 +35,6 @@ void motor_init(){
     pwm_set_wrap(slice_num, 100); // PWM period 100 cycles
     pwm_set_clkdiv(slice_num, 1.0f); // PWM clock divider 1.0
 */
-
-    gpio_put(IN1_PIN, 0);
-    gpio_put(IN2_PIN, 0);
 }
 
 /*
@@ -40,13 +47,11 @@ void motor_set_speed(float speed){
 void forward(){
     gpio_put(IN1_PIN, 1);
     gpio_put(IN2_PIN, 0);
-    gpio_put(PICO_DEFAULT_LED_PIN, 1);
 }
 
 void backward(){
     gpio_put(IN1_PIN, 0);
     gpio_put(IN2_PIN, 1);
-    gpio_put(PICO_DEFAULT_LED_PIN, 0);
 }
 
 void stop(){
@@ -56,20 +61,24 @@ void stop(){
 
 void vMotorTask(){
     for(;;){
-        vTaskDelay(1000);
         forward();
+        gpio_put(PICO_DEFAULT_LED_PIN, 1);
+        vTaskDelay(2000);
         stop();
-        vTaskDelay(250);
-        backward();
-        stop();
+        gpio_put(PICO_DEFAULT_LED_PIN, 0);
+        vTaskDelay(1000);
     }
 }
 
 
 void main(){
+    stdio_init_all();
     motor_init();
     gpio_init(PICO_DEFAULT_LED_PIN);
     gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+
+    sleep_ms(250);
+
     xTaskCreate(vMotorTask, "Motor Task", 128, NULL, 1, NULL);
     vTaskStartScheduler();
 }
