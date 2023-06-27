@@ -11,30 +11,39 @@
 #define IN1_PIN 1
 #define IN2_PIN 0
 
+#define PWM_RANGE 100
+
 void motor_init(){
-    //init gpio
-    gpio_init(ENA_PIN);
     gpio_init(IN1_PIN);
     gpio_init(IN2_PIN);
 
-    //set gpio pin directions
-    gpio_set_dir(ENA_PIN, GPIO_OUT);
     gpio_set_dir(IN1_PIN, GPIO_OUT);
     gpio_set_dir(IN2_PIN, GPIO_OUT);
 
     gpio_put(IN1_PIN, 0);
     gpio_put(IN2_PIN, 0);
 
-    // enable the motor by setting the ENA pin hight
+    // configure ENA_PIN
+    /*
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&config, 25.0f); // Set 
+    pwm_config_set_wrap(&motor_ena_config, PWM_RANGE);
+    pwm_init(ENA_PIN, &motor_ena_config, true);
+    pwm_set_enabled(ENA_PIN, true);
+    pwm_set_gpio_level(ENA_PIN, true);
+    */
+
     gpio_set_function(ENA_PIN, GPIO_FUNC_PWM);
+
     uint slice_num = pwm_gpio_to_slice_num(ENA_PIN);
-    pwm_set_wrap(slice_num, 100); // PWM period 100 cycles
-    pwm_set_clkdiv(slice_num, 1.0f); // PWM clock divider 1.0
+    pwm_set_wrap(slice_num, PWM_RANGE);
+    pwm_set_chan_level(slice_num, PWM_CHAN_A, 0);
+    pwm_set_enabled(slice_num, true);
 }
 
-void motor_set_speed(float speed){
+void motor_set_speed(int speed){
     uint slice_num = pwm_gpio_to_slice_num(ENA_PIN);
-    pwm_set_chan_level(slice_num, ENA_PIN, speed * 100); // set PWM duty cycle (0-100%)
+    pwm_set_chan_level(slice_num, PWM_CHAN_A, speed); // set PWM duty cycle (0-100%)
 }
 
 void forward(){
@@ -55,18 +64,16 @@ void stop(){
 }
 
 void vMotorTask(){
-    bool flag = true;
     for(;;){
         forward();
-        vTaskDelay(2000);
+        vTaskDelay(pdMS_TO_TICKS(1000));
         stop();
-        vTaskDelay(1000);
-        if(flag)
-            motor_set_speed(0.5f); // set motor speed to 50%
-            flag = false;
-        else
-            motor_set_speed(1.0f); // set to 100%
-            flag = true;
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        motor_set_speed(50);
+        forward();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        stop();
+        motor_set_speed(99);
     }
 }
 
@@ -79,6 +86,6 @@ void main(){
 
     sleep_ms(250);
 
-    xTaskCreate(vMotorTask, "Motor Control Task", 128, NULL, 1, NULL);
+    xTaskCreate(vMotorTask, "Motor Control Task", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
     vTaskStartScheduler();
 }
