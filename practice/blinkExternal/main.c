@@ -2,7 +2,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#define LED_PIN 0
+#define LED_PIN 15
 
 void vBlinkTask(){
     for(;;){
