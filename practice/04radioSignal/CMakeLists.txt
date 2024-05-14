@@ -13,12 +13,17 @@ set(CMAKE_CXX_STANDARD 17)
 # Initialize the SDK
 pico_sdk_init()
 
-add_executable(motorSpeedControl main.c)
+add_executable(picow_ble main.c)
 
-target_include_directories(motorSpeedControl PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+target_include_directories(picow_ble PRIVATE ${CMAKE_CURRENT_LIST_DIR})
  
 # pull in common dependencies
-target_link_libraries(motorSpeedControl pico_stdlib hardware_pwm FreeRTOS-Kernel FreeRTOS-Kernel-Heap4)
+target_link_libraries(picow_ble
+                      pico_stdlib
+                      hardware_pwm
+                      FreeRTOS-Kernel
+                      FreeRTOS-Kernel-Heap4
+                      pico_btstack_ble)
 
 # create map/bin/hex/uf2 file etc.
-pico_add_extra_outputs(motorSpeedControl)
+pico_add_extra_outputs(picow_ble)
