@@ -3,6 +3,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "event_groups.h"
+#include ""
 
 #define mainLED_ON_BIT      ( 1UL << 0UL )
 #define mainLED_OFF_BIT     ( 1UL << 1UL )
@@ -81,7 +82,7 @@ static void vEventBitReadingTask( void * pvParameters )
                 cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
                 vTaskDelay( pdMS_TO_TICKS( 500 ) );
 
-                // immediately exit
+                /* Check if there is an incoming event notification, DON'T CLEAR it and exit immediately */
                 xEventGroupValue = xEventGroupWaitBits( xEventGroup, xBitsToWaitFor, pdFALSE, pdFALSE, 0 );
 
                 if( ( xEventGroupValue & mainLED_ON_BIT ) != 0 )
@@ -114,8 +115,6 @@ int main()
     }
     else
     {
-        // vTaskCoreAffinitySet(SettingHandle, 1);
-        // vTaskCoreAffinitySet(ReadingHandle, 0);
         vTaskStartScheduler();
     }
 
