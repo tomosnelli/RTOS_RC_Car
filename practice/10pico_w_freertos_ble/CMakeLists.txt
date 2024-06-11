@@ -48,8 +48,8 @@ target_link_libraries(pico_w_freertos_ble
         pico_stdlib
         pico_btstack_ble
         pico_btstack_cyw43
-        pico_cyw43_arch_lwip_sys_freertos
         FreeRTOS-Kernel-Heap4
+        pico_cyw43_arch_lwip_sys_freertos
         )
 
 pico_add_extra_outputs(pico_w_freertos_ble)
