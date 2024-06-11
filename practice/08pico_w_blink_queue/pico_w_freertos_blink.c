@@ -3,104 +3,126 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
+#include "event_groups.h"
 
-#define LED_QUEUE_MAX 5
+#define mainLED_ON_BIT      ( 1UL << 0UL )
+#define mainLED_OFF_BIT     ( 1UL << 1UL )
+#define mainLED_BLINK_BIT   ( 1UL << 2UL )
 
-typedef struct LED_Command
+static EventGroupHandle_t xEventGroup;
+static TaskHandle_t SettingHandle;
+static TaskHandle_t ReadingHandle;
+
+/**
+ * PICO blink control with FreeRTOS event groups.
+ * Previously tried queues but kinda got messy
+ */
+
+static void vEventBitSettingTask( void * pvParameters )
 {
-    LED_Operation_t * command;
-    size_t uSize;
-} LED_Command_t;
-
-void vTaskSendLED_Command( void * pvParameters )
-{
-    // only send once
-    BaseType_t xStatus;
-    LED_Command_t myCommand = { pairing, sizeof( pairing )/sizeof( LED_Operation_t ) };
+    const TickType_t xDelay = pdMS_TO_TICKS( 1000UL ), xDontBlock = 0;
 
     for( ;; )
     {
-        xStatus = xQueueSend( xLED_Queue, ( void * ) &myCommand, pdMS_TO_TICKS( 250 ) );
+        vTaskDelay( xDelay );
 
-        if( xStatus != pdTRUE )
-        {
-            // failed....
-        }
+        // set bit to turn on 
+        xEventGroupSetBits( xEventGroup, mainLED_ON_BIT );
 
-        vTaskDelay( pdMS_TO_TICKS( 3000 ) );
+        vTaskDelay( xDelay );
+
+        // set bit to turn off
+        xEventGroupSetBits( xEventGroup, mainLED_OFF_BIT );
+
+
+        vTaskDelay( xDelay );
+
+        // set bit to blink
+        xEventGroupSetBits( xEventGroup, mainLED_BLINK_BIT );
+
+        vTaskDelay( pdMS_TO_TICKS( 3000UL ) );
     }
 }
 
-// set this to low prio
-void vTaskBLE_Pairing( void * pvParameters )
+static void vEventBitReadingTask( void * pvParameters )
 {
+    EventBits_t xEventGroupValue;
+    const EventBits_t xBitsToWaitFor = ( mainLED_ON_BIT | mainLED_OFF_BIT | mainLED_BLINK_BIT );
+
+    // init stuff 
+    if( cyw43_arch_init() )
+    {
+        // failed something...
+    }
+
     for( ;; )
     {
-        xTaskNotifyWait( 0, 0, &ulNotification, portMAX_DEPLAY );
+        xEventGroupValue = xEventGroupWaitBits( xEventGroup, xBitsToWaitFor, pdTRUE, pdFALSE, portMAX_DELAY );
 
-        if( ulNotification == START_TASK_NOTIFICATION )
+        if( ( xEventGroupValue & mainLED_ON_BIT ) != 0 )
         {
             cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
-            vTaskDelay( pdMS_TO_TICKS( 100 ) );
-            cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
-            vTaskDelay( pdMS_TO_TICKS( 100 ) );
-            cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
-            vTaskDelay( pdMS_TO_TICKS( 100 ) );
-            cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
-            vTaskDelay( pdMS_TO_TICKS( 100 ) );
-            cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
-            vTaskDelay( pdMS_TO_TICKS( 100 ) );
-            cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
-            vTaskDelay( pdMS_TO_TICKS( 500 ) );
+            vTaskDelay( pdMS_TO_TICKS( 1000UL ) );
         }
-    }
-}
-
-/* Gate keeper task that will receive commands to the Queue.
-   Data should be 1 cycle of blinks.
-   For example, if you just want to blink it on and off:
-   1
-*/
-
-void vTaskCYW_LED( void * pvParameters )
-{
-    for( ;; )
-    {
-        xTaskNotifyWait( 0, 0x00, &ulNotifiedValue, portMAX_DEPLAY );
-
-        if( ( ulNotifiedValue & 0x01 &0x01) != 0 )
+        else if( ( xEventGroupValue & mainLED_OFF_BIT ) != 0 )
         {
-            
+            cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
+            vTaskDelay( pdMS_TO_TICKS( 1000UL ) );
         }
-    }
-}
+        else if( ( xEventGroupValue & mainLED_BLINK_BIT ) != 0 )
+        {
+            for( ;; )
+            {
+                cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
+                vTaskDelay( pdMS_TO_TICKS( 100 ) );
+                cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
+                vTaskDelay( pdMS_TO_TICKS( 100 ) );
+                cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
+                vTaskDelay( pdMS_TO_TICKS( 100 ) );
+                cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
+                vTaskDelay( pdMS_TO_TICKS( 100 ) );
+                cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
+                vTaskDelay( pdMS_TO_TICKS( 100 ) );
+                cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
+                vTaskDelay( pdMS_TO_TICKS( 500 ) );
 
-void vLaunch( void )
-{
-    BaseType_t xStatus;
-    TaskHandle_t blinkHandle;
+                // emmediately exit
+                xEventGroupValue = xEventGroupWaitBits( xEventGroup, xBitsToWaitFor, pdFALSE, pdFALSE, 0 );
 
-    xStatus = xTaskCreate( vTaskSendLED_Command, "SEND", 1024, NULL, configMAX_PRIORITIES - 5, NULL );
-    xStatus = xTaskCreate( vTaskCYW_LED, "RECEIVE", 1024, NULL, configMAX_PRIORITIES - 3, NULL );
+                if( ( xEventGroupValue & mainLED_ON_BIT ) != 0 )
+                {
+                    break;
+                }
 
-    if( xStatus != pdPASS )
-    {
-        printf("Error: xTaskCreate failed");
-        exit(1);
-    }
-    else
-    {
-        vTaskCoreAffinitySet(blinkHandle, 1);
-        vTaskStartScheduler();
+                if( ( xEventGroupValue & mainLED_OFF_BIT ) != 0 )
+                {
+                    break;
+                }
+            }
+        }
     }
 }
 
 int main()
 {
     stdio_init_all();
-    printf("init stuff");
 
-    vLaunch();
+    BaseType_t xStatus;
+    xEventGroup = xEventGroupCreate();
+
+    xStatus = xTaskCreate( vEventBitSettingTask, "SETTING", 1024, NULL, configMAX_PRIORITIES - 4, &SettingHandle );
+    xStatus = xTaskCreate( vEventBitReadingTask , "READ", 1024, NULL, configMAX_PRIORITIES - 3, &ReadingHandle );
+
+    if( xStatus != pdPASS )
+    {
+        printf("Error: xTaskCreate failed");
+    }
+    else
+    {
+        // vTaskCoreAffinitySet(SettingHandle, 1);
+        // vTaskCoreAffinitySet(ReadingHandle, 0);
+        vTaskStartScheduler();
+    }
 
     for( ;; );
 
