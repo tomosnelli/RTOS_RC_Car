@@ -86,7 +86,7 @@ static void vEventBitReadingTask( void * pvParameters )
                 cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
                 vTaskDelay( pdMS_TO_TICKS( 500 ) );
 
-                // emmediately exit
+                // immediately exit
                 xEventGroupValue = xEventGroupWaitBits( xEventGroup, xBitsToWaitFor, pdFALSE, pdFALSE, 0 );
 
                 if( ( xEventGroupValue & mainLED_ON_BIT ) != 0 )
