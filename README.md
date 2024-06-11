@@ -33,3 +33,6 @@ Currently, this repository is a playground for me to get accustomed to FreeRTOS,
 
 <p>This project showcases my adeptness in both hardware and software engineering. It exemplifies a comprehensive understanding of microcontroller systems, motor control, real-time operating systems, and the Arduino programming environment. I'm excited to share this project and am open for any further discussions or elucidations required.</p>
 
+
+<h3>Developer Side Notes</h3>
+<p>The debugging probe seems to be useless in terms of FreeRTOS pico port development. Just corss your fingers and pray that what's codeded works......</p>
