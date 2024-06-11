@@ -25,26 +25,26 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(pico_w_freertos_ble pico_w_freertos_ble.c )
+add_executable(pico_w_freertos_blink pico_w_freertos_blink.c )
 
-pico_set_program_name(pico_w_freertos_ble "pico_w_freertos_ble")
-pico_set_program_version(pico_w_freertos_ble "0.1")
+pico_set_program_name(pico_w_freertos_blink "pico_w_freertos_ble")
+pico_set_program_version(pico_w_freertos_blink "0.1")
 
-pico_enable_stdio_uart(pico_w_freertos_ble 1)
-pico_enable_stdio_usb(pico_w_freertos_ble 0)
+pico_enable_stdio_uart(pico_w_freertos_blink 1)
+pico_enable_stdio_usb(pico_w_freertos_blink 0)
 
 # Add the standard library to the build
-target_link_libraries(pico_w_freertos_ble
+target_link_libraries(pico_w_freertos_blink
         pico_stdlib)
 
 # Add the standard include files to the build
-target_include_directories(pico_w_freertos_ble PRIVATE
+target_include_directories(pico_w_freertos_blink PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}
   ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts or any other standard includes, if required
 )
 
 # Add any user requested libraries
-target_link_libraries(pico_w_freertos_ble 
+target_link_libraries(pico_w_freertos_blink
         pico_stdlib
         pico_btstack_ble
         pico_btstack_cyw43
@@ -53,4 +53,4 @@ target_link_libraries(pico_w_freertos_ble
         FreeRTOS-Kernel-Heap4
         )
 
-pico_add_extra_outputs(pico_w_freertos_ble)
+pico_add_extra_outputs(pico_w_freertos_blink)
