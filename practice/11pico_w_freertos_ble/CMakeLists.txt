@@ -33,10 +33,6 @@ pico_set_program_version(pico_w_freertos_ble "0.1")
 pico_enable_stdio_uart(pico_w_freertos_ble 1)
 pico_enable_stdio_usb(pico_w_freertos_ble 0)
 
-# Add the standard library to the build
-target_link_libraries(pico_w_freertos_ble
-        pico_stdlib)
-
 # Add the standard include files to the build
 target_include_directories(pico_w_freertos_ble PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}
@@ -46,10 +42,13 @@ target_include_directories(pico_w_freertos_ble PRIVATE
 # Add any user requested libraries
 target_link_libraries(pico_w_freertos_ble
         pico_stdlib
-        pico_btstack_ble
         pico_btstack_cyw43
+        pico_btstack_classic
+        # pico_btstack_ble
         FreeRTOS-Kernel-Heap4
         pico_cyw43_arch_lwip_sys_freertos
+        # pico_cyw43_arch_lwip_threadsafe_background
         )
 
 pico_add_extra_outputs(pico_w_freertos_ble)
+

@@ -1,81 +1,74 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "pico/btstack_cyw43.h"
-#include "btstack_tlv.h"
 #include "btstack_config.h"
 #include "btstack.h"
 #include "FreeRTOS.h"
 #include "task.h"
-#include "event_groups.h"
+#include <inttypes.h>
 
-/* BEGIN FREERTOS EVENTGROUP BITS */
-#define mainLED_ON_BIT      ( 1UL << 0UL )
-#define mainLED_OFF_BIT     ( 1UL << 1UL )
-#define mainLED_BLINK_BIT   ( 1UL << 2UL )
-/* END   FREERTOS EVENTGROUP BITS */
+/* TASK NOTIFY VALUE     */
+#define mainLED_ON    0x00
+#define mainLED_OFF   0x01
+#define mainLED_BLINK 0x02
+/* END TASK NOTIFY VALUE */
 
-#define TLV_TAG_HOGD ((((uint32_t) 'H') << 24 ) | (((uint32_t) 'O') << 16) | (((uint32_t) 'G') << 8) | 'D')
+#define MAX_ATTRIBUTE_VALUE_SIZE 300
 
-/* BEGIN FREERTOS HANDLES */
-static EventGroupHandle_t xEventGroup;
-static TaskHandle_t xSettingHandle;
-static TaskHandle_t xReadingHandle;
-/* END   FREERTOS HANDLES */
+/* TASK HANDLES     */
+static TaskHandle_t xNotifyHandle;
+static TaskHandle_t xWaitHandle;
+/* END TASK HANDLES */
 
-/* I know, this isn't managed well in terms of dir structure...
-   Next step is to learn what is the standard way of managing things
-   in regards to FreeRTOS */
+/**
+ * PICO blink control with FreeRTOS event groups.
+ * Previously tried queues but kinda got messy
+ */
 
-/* BEGIN LED TASK DEFINITIONS */
+// static void vTaskSendNotification( void * pvParameters )
+// {
+//     const TickType_t xDelay = pdMS_TO_TICKS( 1000UL ), xMoreDelay = pdMS_TO_TICKS( 5000UL );
+// 
+//     for ( ;; )
+//     {
+//         xTaskNotify( xWaitHandle, mainLED_ON, eSetValueWithOverwrite );
+//         vTaskDelay( xDelay );
+// 
+//         xTaskNotify( xWaitHandle, mainLED_OFF, eSetValueWithOverwrite );
+//         vTaskDelay( xDelay );
+// 
+//         xTaskNotify( xWaitHandle, mainLED_BLINK, eSetValueWithOverwrite );
+//         vTaskDelay( xMoreDelay );
+//     }
+// }
 
-/* most likely won't use this function for real use case */
-static void vEventBitSettingTask( void * pvParameters )
+static void vTaskReceiveNotification( void * pvParameters )
 {
-    const TickType_t xDelay = pdMS_TO_TICKS( 1000UL ), xDontBlock = 0;
-
-    for( ;; )
-    {
-        // set bit to turn on 
-        vTaskDelay( xDelay );
-        xEventGroupSetBits( xEventGroup, mainLED_ON_BIT );
-        vTaskDelay( xDelay );
-
-        // set bit to turn off
-        xEventGroupSetBits( xEventGroup, mainLED_OFF_BIT );
-        vTaskDelay( xDelay );
-
-        // set bit to blink
-        xEventGroupSetBits( xEventGroup, mainLED_BLINK_BIT );
-        vTaskDelay( pdMS_TO_TICKS( 3000UL ) );
-    }
-}
-
-static void vEventBitReadingTask( void * pvParameters )
-{
-    EventBits_t xEventGroupValue;
-    const EventBits_t xBitsToWaitFor = ( mainLED_ON_BIT | mainLED_OFF_BIT | mainLED_BLINK_BIT );
+    uint32_t ulNotifiedValue;
 
     // init stuff 
     if( cyw43_arch_init() )
     {
         // failed something...
+        for( ;; );
     }
 
     for( ;; )
     {
-        xEventGroupValue = xEventGroupWaitBits( xEventGroup, xBitsToWaitFor, pdTRUE, pdFALSE, portMAX_DELAY );
+        // xEventGroupValue = xEventGroupWaitBits( xEventGroup, xBitsToWaitFor, pdTRUE, pdFALSE, portMAX_DELAY );
+        xTaskNotifyWait( 0x00, ULONG_MAX, &ulNotifiedValue, portMAX_DELAY );
 
-        if( ( xEventGroupValue & mainLED_ON_BIT ) != 0 )
+        if( ( ulNotifiedValue & mainLED_ON ) != 0 )
         {
             cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
             vTaskDelay( pdMS_TO_TICKS( 1000UL ) );
         }
-        else if( ( xEventGroupValue & mainLED_OFF_BIT ) != 0 )
+        else if( ( ulNotifiedValue & mainLED_OFF ) != 0 )
         {
             cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 0 );
             vTaskDelay( pdMS_TO_TICKS( 1000UL ) );
         }
-        else if( ( xEventGroupValue & mainLED_BLINK_BIT ) != 0 )
+        else if( ( ulNotifiedValue & mainLED_BLINK ) != 0 )
         {
             for( ;; )
             {
@@ -93,14 +86,14 @@ static void vEventBitReadingTask( void * pvParameters )
                 vTaskDelay( pdMS_TO_TICKS( 500 ) );
 
                 /* Check if there is an incoming event notification, DON'T CLEAR it and exit immediately */
-                xEventGroupValue = xEventGroupWaitBits( xEventGroup, xBitsToWaitFor, pdFALSE, pdFALSE, 0 );
+                xTaskNotifyWait( 0x00, 0x00, &ulNotifiedValue, 0 );
 
-                if( ( xEventGroupValue & mainLED_ON_BIT ) != 0 )
+                if( ( ulNotifiedValue & mainLED_ON ) != 0 )
                 {
                     break;
                 }
 
-                if( ( xEventGroupValue & mainLED_OFF_BIT ) != 0 )
+                if( ( ulNotifiedValue & mainLED_OFF ) != 0 )
                 {
                     break;
                 }
@@ -108,7 +101,6 @@ static void vEventBitReadingTask( void * pvParameters )
         }
     }
 }
-/* END LED TASK DEFINITIONS */
 
 /*
  * Copyright (C) 2017 BlueKitchen GmbH
@@ -154,71 +146,60 @@ static void vEventBitReadingTask( void * pvParameters )
  * otherwise it will fall back to BOOT protocol mode. 
  */
 
-#include <inttypes.h>
-#include <stdio.h>
-
-#include "btstack_config.h"
-#include "btstack.h"
-
-#define MAX_ATTRIBUTE_VALUE_SIZE 300
-
-// MBP 2016 static const char * remote_addr_string = "F4-0F-24-3B-1B-E1";
-// iMpulse static const char * remote_addr_string = "64:6E:6C:C1:AA:B5";
-// Logitec 
+/* PS5 DualSense Controller MAC */
 static const char * remote_addr_string = "10:18:49:72:6A:CE";
-
 static bd_addr_t remote_addr;
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 
 // Simplified US Keyboard with Shift modifier
 
-#define CHAR_ILLEGAL     0xff
-#define CHAR_RETURN     '\n'
-#define CHAR_ESCAPE      27
-#define CHAR_TAB         '\t'
-#define CHAR_BACKSPACE   0x7f
+// #define CHAR_ILLEGAL     0xff
+// #define CHAR_RETURN     '\n'
+// #define CHAR_ESCAPE      27
+// #define CHAR_TAB         '\t'
+// #define CHAR_BACKSPACE   0x7f
 
 /**
  * English (US)
  */
-static const uint8_t keytable_us_none [] = {
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /*   0-3 */
-    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',                   /*  4-13 */
-    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',                   /* 14-23 */
-    'u', 'v', 'w', 'x', 'y', 'z',                                       /* 24-29 */
-    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',                   /* 30-39 */
-    CHAR_RETURN, CHAR_ESCAPE, CHAR_BACKSPACE, CHAR_TAB, ' ',            /* 40-44 */
-    '-', '=', '[', ']', '\\', CHAR_ILLEGAL, ';', '\'', 0x60, ',',       /* 45-54 */
-    '.', '/', CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,   /* 55-60 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 61-64 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 65-68 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 69-72 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 73-76 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 77-80 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 81-84 */
-    '*', '-', '+', '\n', '1', '2', '3', '4', '5',                       /* 85-97 */
-    '6', '7', '8', '9', '0', '.', 0xa7,                                 /* 97-100 */
-}; 
-
-static const uint8_t keytable_us_shift[] = {
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /*  0-3  */
-    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',                   /*  4-13 */
-    'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',                   /* 14-23 */
-    'U', 'V', 'W', 'X', 'Y', 'Z',                                       /* 24-29 */
-    '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',                   /* 30-39 */
-    CHAR_RETURN, CHAR_ESCAPE, CHAR_BACKSPACE, CHAR_TAB, ' ',            /* 40-44 */
-    '_', '+', '{', '}', '|', CHAR_ILLEGAL, ':', '"', 0x7E, '<',         /* 45-54 */
-    '>', '?', CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,   /* 55-60 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 61-64 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 65-68 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 69-72 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 73-76 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 77-80 */
-    CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 81-84 */
-    '*', '-', '+', '\n', '1', '2', '3', '4', '5',                       /* 85-97 */
-    '6', '7', '8', '9', '0', '.', 0xb1,                                 /* 97-100 */
-}; 
+// static const uint8_t keytable_us_none [] = {
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /*   0-3 */
+//     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',                   /*  4-13 */
+//     'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',                   /* 14-23 */
+//     'u', 'v', 'w', 'x', 'y', 'z',                                       /* 24-29 */
+//     '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',                   /* 30-39 */
+//     CHAR_RETURN, CHAR_ESCAPE, CHAR_BACKSPACE, CHAR_TAB, ' ',            /* 40-44 */
+//     '-', '=', '[', ']', '\\', CHAR_ILLEGAL, ';', '\'', 0x60, ',',       /* 45-54 */
+//     '.', '/', CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,   /* 55-60 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 61-64 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 65-68 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 69-72 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 73-76 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 77-80 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 81-84 */
+//     '*', '-', '+', '\n', '1', '2', '3', '4', '5',                       /* 85-97 */
+//     '6', '7', '8', '9', '0', '.', 0xa7,                                 /* 97-100 */
+// }; 
+// 
+// static const uint8_t keytable_us_shift[] = {
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /*  0-3  */
+//     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',                   /*  4-13 */
+//     'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',                   /* 14-23 */
+//     'U', 'V', 'W', 'X', 'Y', 'Z',                                       /* 24-29 */
+//     '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',                   /* 30-39 */
+//     CHAR_RETURN, CHAR_ESCAPE, CHAR_BACKSPACE, CHAR_TAB, ' ',            /* 40-44 */
+//     '_', '+', '{', '}', '|', CHAR_ILLEGAL, ':', '"', 0x7E, '<',         /* 45-54 */
+//     '>', '?', CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,   /* 55-60 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 61-64 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 65-68 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 69-72 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 73-76 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 77-80 */
+//     CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL, CHAR_ILLEGAL,             /* 81-84 */
+//     '*', '-', '+', '\n', '1', '2', '3', '4', '5',                       /* 85-97 */
+//     '6', '7', '8', '9', '0', '.', 0xb1,                                 /* 97-100 */
+// }; 
 
 // SDP
 static uint8_t hid_descriptor_storage[MAX_ATTRIBUTE_VALUE_SIZE];
@@ -280,9 +261,8 @@ static void hid_host_setup(void){
  * 
  */
 
-#define NUM_KEYS 6
-static uint8_t last_keys[NUM_KEYS];
 static void hid_host_handle_interrupt_report(const uint8_t * report, uint16_t report_len){
+    printf("Break point");
     // check if HID Input Report
     if (report_len < 1) return;
     if (*report != 0xa1) return; 
@@ -296,56 +276,52 @@ static void hid_host_handle_interrupt_report(const uint8_t * report, uint16_t re
         hid_descriptor_storage_get_descriptor_len(hid_host_cid), 
         HID_REPORT_TYPE_INPUT, report, report_len);
 
-    int shift = 0;
-    uint8_t new_keys[NUM_KEYS];
-    memset(new_keys, 0, sizeof(new_keys));
-    int     new_keys_count = 0;
     while (btstack_hid_parser_has_more(&parser)){
         uint16_t usage_page;
         uint16_t usage;
         int32_t  value;
         btstack_hid_parser_get_field(&parser, &usage_page, &usage, &value);
-        if (usage_page != 0x07) continue;   
-        switch (usage){
-            case 0xe1:
-            case 0xe6:
-                if (value){
-                    shift = 1;
-                }
-                continue;
-            case 0x00:
-                continue;
-            default:
-                break;
-        }
-        if (usage >= sizeof(keytable_us_none)) continue;
+        printf("Break point");
+        // if (usage_page != 0x07) continue;   
+        // switch (usage){
+        //     case 0xe1:
+        //     case 0xe6:
+        //         if (value){
+        //             shift = 1;
+        //         }
+        //         continue;
+        //     case 0x00:
+        //         continue;
+        //     default:
+        //         break;
+        // }
+        // if (usage >= sizeof(keytable_us_none)) continue;
 
-        // store new keys
-        new_keys[new_keys_count++] = (uint8_t) usage;
+        // // store new keys
+        // new_keys[new_keys_count++] = (uint8_t) usage;
 
-        // check if usage was used last time (and ignore in that case)
-        int i;
-        for (i=0;i<NUM_KEYS;i++){
-            if (usage == last_keys[i]){
-                usage = 0;
-            }
-        }
-        if (usage == 0) continue;
+        // // check if usage was used last time (and ignore in that case)
+        // int i;
+        // for (i=0;i<NUM_KEYS;i++){
+        //     if (usage == last_keys[i]){
+        //         usage = 0;
+        //     }
+        // }
+        // if (usage == 0) continue;
 
-        uint8_t key;
-        if (shift){
-            key = keytable_us_shift[usage];
-        } else {
-            key = keytable_us_none[usage];
-        }
-        if (key == CHAR_ILLEGAL) continue;
-        if (key == CHAR_BACKSPACE){ 
-            printf("\b \b");    // go back one char, print space, go back one char again
-            continue;
-        }
-        printf("%c", key);
+        // uint8_t key;
+        // if (shift){
+        //     key = keytable_us_shift[usage];
+        // } else {
+        //     key = keytable_us_none[usage];
+        // }
+        // if (key == CHAR_ILLEGAL) continue;
+        // if (key == CHAR_BACKSPACE){ 
+        //     printf("\b \b");    // go back one char, print space, go back one char again
+        //     continue;
+        // }
+        // printf("%c", key);
     }
-    memcpy(last_keys, new_keys, NUM_KEYS);
 }
 
 /*
@@ -367,10 +343,10 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 
     /* LISTING_RESUME */
     switch (packet_type) {
-		case HCI_EVENT_PACKET:
+        case HCI_EVENT_PACKET:
             event = hci_event_packet_get_type(packet);
-            
-            switch (event) {            
+
+            switch (event) {
 #ifndef HAVE_BTSTACK_STDIN
                 /* @text When BTSTACK_EVENT_STATE with state HCI_STATE_WORKING
                  * is received and the example is started in client mode, the remote SDP HID query is started.
@@ -386,11 +362,11 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
 #endif
                 /* LISTING_PAUSE */
                 case HCI_EVENT_PIN_CODE_REQUEST:
-					// inform about pin code request
+                    // inform about pin code request
                     printf("Pin code request - using '0000'\n");
                     hci_event_pin_code_request_get_bd_addr(packet, event_addr);
                     gap_pin_code_response(event_addr, "0000");
-					break;
+                    break;
 
                 case HCI_EVENT_USER_CONFIRMATION_REQUEST:
                     // inform about user confirmation request
@@ -480,7 +456,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                             hid_host_descriptor_available = false;
                             printf("HID Host disconnected.\n");
                             break;
-                        
+
                         default:
                             break;
                     }
@@ -502,7 +478,7 @@ static void show_usage(void){
     printf("\n--- Bluetooth HID Host Console %s ---\n", bd_addr_to_str(iut_address));
     printf("c      - Connect to %s in report mode, with fallback to boot mode.\n", remote_addr_string);
     printf("C      - Disconnect\n");
-    
+
     printf("\n");
     printf("Ctrl-c - exit\n");
     printf("---\n");
@@ -532,15 +508,33 @@ static void stdin_process(char cmd){
 }
 #endif
 
+void vTaskClassicServer( void * pvParamaetrs )
+{
+    if( cyw43_arch_init() )
+    {
+        for( ;; );
+    }
+
+    hid_host_setup();
+
+    for( ;; )
+    {
+        printf("alive?");
+        xTaskNotify( xWaitHandle, mainLED_ON, eSetValueWithOverwrite );
+        btstack_run_loop_execute();
+        xTaskNotify( xWaitHandle, mainLED_OFF, eSetValueWithOverwrite );
+    }
+}
+
 int main()
 {
     stdio_init_all();
 
-    BaseType_t xStatus;
-    xEventGroup = xEventGroupCreate();
+    BaseType_t xStatus = pdPASS;
 
-    xStatus = xTaskCreate( vEventBitSettingTask, "SETTING", 1024, NULL, configMAX_PRIORITIES - 4, &xSettingHandle );
-    xStatus = xTaskCreate( vEventBitReadingTask , "READ", 1024, NULL, configMAX_PRIORITIES - 3, &xReadingHandle );
+    // xStatus &= xTaskCreate( vTaskSendNotification, "Notify", 1024, NULL, configMAX_PRIORITIES - 4, &xNotifyHandle );
+    xStatus &= xTaskCreate( vTaskReceiveNotification, "WaitNotify", 1024, NULL, configMAX_PRIORITIES - 5, &xWaitHandle );
+    xStatus &= xTaskCreate( vTaskClassicServer, "CLASSIC_SETUP", 1024, NULL, configMAX_PRIORITIES - 3, NULL );
 
     if( xStatus != pdPASS )
     {
@@ -555,3 +549,4 @@ int main()
 
     return 0;
 }
+

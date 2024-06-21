@@ -1,23 +1,24 @@
 #ifndef _PICO_BTSTACK_BTSTACK_CONFIG_H
 #define _PICO_BTSTACK_BTSTACK_CONFIG_H
 
-#ifndef ENABLE_BLE
-#error Please link to pico_btstack_ble
-#endif
+// #ifndef ENABLE_BLE
+// #error Please link to pico_btstack_ble
+// #endif
 
 // BTstack features that can be enabled
-#define ENABLE_LE_PERIPHERAL
+// #define ENABLE_BLE
+// #define ENABLE_LE_PERIPHERAL
 #define ENABLE_LOG_INFO
 #define ENABLE_LOG_ERROR
 #define ENABLE_PRINTF_HEXDUMP
 
 // for the client
-#if RUNNING_AS_CLIENT
-#define ENABLE_LE_CENTRAL
-#define MAX_NR_GATT_CLIENTS 1
-#else
-#define MAX_NR_GATT_CLIENTS 0
-#endif
+// #if RUNNING_AS_CLIENT
+// #define ENABLE_LE_CENTRAL
+// #define MAX_NR_GATT_CLIENTS 1
+// #else
+// #define MAX_NR_GATT_CLIENTS 0
+// #endif
 
 // BTstack configuration. buffers, sizes, ...
 #define HCI_OUTGOING_PRE_BUFFER_SIZE 4
@@ -26,7 +27,7 @@
 #define MAX_NR_HCI_CONNECTIONS 1
 #define MAX_NR_SM_LOOKUP_ENTRIES 3
 #define MAX_NR_WHITELIST_ENTRIES 16
-#define MAX_NR_LE_DEVICE_DB_ENTRIES 16
+// #define MAX_NR_LE_DEVICE_DB_ENTRIES 16
 
 // Limit number of ACL/SCO Buffer to use by stack to avoid cyw43 shared bus overrun
 #define MAX_NR_CONTROLLER_ACL_BUFFERS 3
