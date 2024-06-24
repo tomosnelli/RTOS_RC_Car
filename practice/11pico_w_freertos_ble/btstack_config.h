@@ -1,59 +1,62 @@
-#ifndef _PICO_BTSTACK_BTSTACK_CONFIG_H
-#define _PICO_BTSTACK_BTSTACK_CONFIG_H
+//
+// btstack_config.h for Raspberry Pi port
+//
+// Documentation: https://bluekitchen-gmbh.com/btstack/#how_to/
+//
 
-// #ifndef ENABLE_BLE
-// #error Please link to pico_btstack_ble
-// #endif
+#ifndef BTSTACK_CONFIG_H
+#define BTSTACK_CONFIG_H
+
+// Port related features
+#define HAVE_ASSERT
+#define HAVE_BTSTACK_STDIN
+#define HAVE_MALLOC
+#define HAVE_POSIX_FILE_IO
 
 // BTstack features that can be enabled
-// #define ENABLE_BLE
-// #define ENABLE_LE_PERIPHERAL
-#define ENABLE_LOG_INFO
+#define ENABLE_AVRCP_COVER_ART
+#define ENABLE_GOEP_L2CAP
+#define ENABLE_H5
+#define ENABLE_HFP_WIDE_BAND_SPEECH
+#define ENABLE_L2CAP_LE_CREDIT_BASED_FLOW_CONTROL_MODE
+#define ENABLE_LE_CENTRAL
+#define ENABLE_LE_DATA_LENGTH_EXTENSION
+#define ENABLE_LE_PERIPHERAL
+#define ENABLE_LE_SECURE_CONNECTIONS
 #define ENABLE_LOG_ERROR
+#define ENABLE_LOG_INFO
+#define ENABLE_MICRO_ECC_FOR_LE_SECURE_CONNECTIONS
 #define ENABLE_PRINTF_HEXDUMP
+#define ENABLE_SCO_OVER_HCI
+#define ENABLE_SDP_DES_DUMP
+#define ENABLE_SOFTWARE_AES128
+#define HCI_ACL_CHUNK_SIZE_ALIGNMENT 4
 
-// for the client
-// #if RUNNING_AS_CLIENT
-// #define ENABLE_LE_CENTRAL
-// #define MAX_NR_GATT_CLIENTS 1
-// #else
-// #define MAX_NR_GATT_CLIENTS 0
-// #endif
+// Warm Boot needed if connected via Wifi on Raspberry Pi 3A+ or 3B+
+// #define ENABLE_CONTROLLER_WARM_BOOT
 
 // BTstack configuration. buffers, sizes, ...
-#define HCI_OUTGOING_PRE_BUFFER_SIZE 4
-#define HCI_ACL_PAYLOAD_SIZE (255 + 4)
-#define HCI_ACL_CHUNK_SIZE_ALIGNMENT 4
-#define MAX_NR_HCI_CONNECTIONS 1
-#define MAX_NR_SM_LOOKUP_ENTRIES 3
-#define MAX_NR_WHITELIST_ENTRIES 16
-// #define MAX_NR_LE_DEVICE_DB_ENTRIES 16
+#define HCI_ACL_PAYLOAD_SIZE (1691 + 4)
+#define HCI_INCOMING_PRE_BUFFER_SIZE 14 // sizeof BNEP header, avoid memcpy
+#define HCI_OUTGOING_PRE_BUFFER_SIZE  4
 
-// Limit number of ACL/SCO Buffer to use by stack to avoid cyw43 shared bus overrun
-#define MAX_NR_CONTROLLER_ACL_BUFFERS 3
-#define MAX_NR_CONTROLLER_SCO_PACKETS 3
+#define NVM_NUM_DEVICE_DB_ENTRIES      16
+#define NVM_NUM_LINK_KEYS              16
 
-// Enable and configure HCI Controller to Host Flow Control to avoid cyw43 shared bus overrun
-#define ENABLE_HCI_CONTROLLER_TO_HOST_FLOW_CONTROL
-#define HCI_HOST_ACL_PACKET_LEN (255+4)
-#define HCI_HOST_ACL_PACKET_NUM 3
-#define HCI_HOST_SCO_PACKET_LEN 120
-#define HCI_HOST_SCO_PACKET_NUM 3
+// Mesh Configuration
+#define ENABLE_MESH
+#define ENABLE_MESH_ADV_BEARER
+#define ENABLE_MESH_GATT_BEARER
+#define ENABLE_MESH_PB_ADV
+#define ENABLE_MESH_PB_GATT
+#define ENABLE_MESH_PROVISIONER
+#define ENABLE_MESH_PROXY_SERVER
 
-// Link Key DB and LE Device DB using TLV on top of Flash Sector interface
-#define NVM_NUM_DEVICE_DB_ENTRIES 16
-#define NVM_NUM_LINK_KEYS 16
+#define MAX_NR_MESH_SUBNETS            2
+#define MAX_NR_MESH_TRANSPORT_KEYS    16
+#define MAX_NR_MESH_VIRTUAL_ADDRESSES 16
 
-// We don't give btstack a malloc, so use a fixed-size ATT DB.
-#define MAX_ATT_DB_SIZE 512
+// allow for one NetKey update
+#define MAX_NR_MESH_NETWORK_KEYS      (MAX_NR_MESH_SUBNETS+1)
 
-// BTstack HAL configuration
-#define HAVE_EMBEDDED_TIME_MS
-// map btstack_assert onto Pico SDK assert()
-#define HAVE_ASSERT
-// Some USB dongles take longer to respond to HCI reset (e.g. BCM20702A).
-#define HCI_RESET_RESEND_TIMEOUT_MS 1000
-#define ENABLE_SOFTWARE_AES128
-#define ENABLE_MICRO_ECC_FOR_LE_SECURE_CONNECTIONS
-
-#endif // MICROPY_INCLUDED_EXTMOD_BTSTACK_BTSTACK_CONFIG_H
+#endif
