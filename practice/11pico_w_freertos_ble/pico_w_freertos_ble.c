@@ -20,6 +20,20 @@
 static TaskHandle_t xWaitHandle;
 /* END TASK HANDLES */
 
+#define DEVICE_NAME "PICO W BLE"
+// char * iphone_addr = "98:60:CA:45:AC:AF";
+char * iphone_addr = "B0:E6:A1:17:9C:AD";
+
+const uint8_t adv_data[] = {
+    0x02, BLUETOOTH_DATA_TYPE_FLAGS, 0x06,
+    0x10, BLUETOOTH_DATA_TYPE_COMPLETE_LOCAL_NAME, 'P', 'I', 'C', 'O', ' ', 'W', ' ', 'H', 'I', 'D', ' ', 'H', 'O', 'S', 'T',
+    0x03, BLUETOOTH_DATA_TYPE_COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS, ORG_BLUETOOTH_SERVICE_HUMAN_INTERFACE_DEVICE & 0xff, ORG_BLUETOOTH_SERVICE_HUMAN_INTERFACE_DEVICE >> 8,
+    // Appearance HID - Keyboard (Category 15, Sub-Category 1)
+    0x03, BLUETOOTH_DATA_TYPE_APPEARANCE, 0xC1, 0x03,
+};
+
+const uint8_t adv_data_len = sizeof(adv_data);
+
 /**
  * PICO blink control with FreeRTOS event groups.
  * Previously tried queues but kinda got messy
@@ -33,7 +47,7 @@ static TaskHandle_t xWaitHandle;
 //     {
 //         xTaskNotify( xWaitHandle, mainLED_ON, eSetValueWithOverwrite );
 //         vTaskDelay( xDelay );
-// 
+//
 //         xTaskNotify( xWaitHandle, mainLED_OFF, eSetValueWithOverwrite );
 //         vTaskDelay( xDelay );
 // 
@@ -47,11 +61,11 @@ static void vTaskReceiveNotification( void * pvParameters )
     uint32_t ulNotifiedValue;
 
     // init stuff 
-    if( cyw43_arch_init() )
-    {
-        // failed something...
-        for( ;; );
-    }
+    // if( cyw43_arch_init() )
+    // {
+    //     // failed something...
+    //     for( ;; );
+    // }
 
     for( ;; )
     {
@@ -422,12 +436,14 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
     UNUSED(channel);
     UNUSED(size);
     uint8_t event;
+    // cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
     /* LISTING_RESUME */
     switch (packet_type) {
         case HCI_EVENT_PACKET:
             event = hci_event_packet_get_type(packet);
             switch (event) {
                 case BTSTACK_EVENT_STATE:
+                    cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
                     if (btstack_event_state_get_state(packet) != HCI_STATE_WORKING) break;
                     btstack_assert(app_state == W4_WORKING);
                     
@@ -443,6 +459,9 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                     remote_device.addr_type = gap_event_advertising_report_get_address_type(packet);
                     // connect
                     printf("Found, connect to device with %s address %s ...\n", remote_device.addr_type == 0 ? "public" : "random" , bd_addr_to_str(remote_device.addr));
+
+                    // cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
+
                     hog_connect();
                     break;
                 case HCI_EVENT_DISCONNECTION_COMPLETE:
@@ -464,6 +483,7 @@ static void packet_handler (uint8_t packet_type, uint16_t channel, uint8_t *pack
                     btstack_run_loop_add_timer(&connection_timer);
                     break;
                 case HCI_EVENT_META_GAP:
+                    cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
                     // wait for connection complete
                     if (hci_event_gap_meta_get_subevent_code(packet) != HCI_SUBEVENT_LE_CONNECTION_COMPLETE) break;
                     if (app_state != W4_CONNECTED) return;
@@ -557,6 +577,7 @@ void vTaskBLEServer( void *pvParameters )
         // something went wrong.......
         for( ;; );
     }
+
     l2cap_init();
 
     sm_init();
@@ -580,16 +601,30 @@ void vTaskBLEServer( void *pvParameters )
     /* LISTING_END */
 
     // Disable stdout buffering
-	setvbuf(stdin, NULL, _IONBF, 0);
+    setvbuf(stdin, NULL, _IONBF, 0);
 
     app_state = W4_WORKING;
 
+    sscanf_bd_addr(iphone_addr, remote_device.addr);
+
+    // Enable BLE
+    // gap_le_set_gatt_client_enabled(true);
+
+    // gap_set_adv_params(0x0030, 0x0030, 0x03, 0x00);
+    bd_addr_t null_addr;
+    gap_advertisements_set_params(0x0030, 0x0030, 0, 0, null_addr, 0x07, 0x00);
+    gap_advertisements_set_data(adv_data_len, (uint8_t*) adv_data);
+    gap_advertisements_enable(1);
+    // gap_set_local_name(DEVICE_NAME);
     // Turn on the device
     hci_power_control(HCI_POWER_ON);
 
     for( ;; )
     {
+        // cyw43_arch_gpio_put( CYW43_WL_GPIO_LED_PIN, 1 );
+        printf("working?");
         btstack_run_loop_execute();
+        // xTaskNotify( xWaitHandle, mainLED_OFF, eSetValueWithOverwrite );
     }
 }
 /* END MY OWN BLE STUFF */
