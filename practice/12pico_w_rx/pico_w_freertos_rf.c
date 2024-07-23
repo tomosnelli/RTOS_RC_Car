@@ -1,5 +1,7 @@
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
+#include "hardware/pwm.h"
+#include "hardware/clocks.h"
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -80,7 +82,27 @@ static void vTaskReceiveNotification( void * pvParameters )
     }
 }
 
-void vTaskRXTask( void * pvParameters )
+float measure_duty_cycle(uint pin)
+{
+    // Only PWM B pins can be used as inputs
+    assert(pwm_gpio_to_channel(pin) == PWM_CHAN_B);
+    uint sliece_num = pwm_gpio_to_slice_num(pin);
+
+    pwm_config cfg = pwm_get_default_config();
+    pwm_config_set_clkdiv_mode(&cfg, PWM_DIV_B_HIGH);
+    pwm_config_set_clkdiv(&cfg, 100);
+    pwm_init(sliece_num, &cfg, false);
+    gpio_set_function(pin, GPIO_FUNC_PWM);
+
+    pwm_set_enabled(slice_num, true);
+    sleep_ms(10);
+    pwm_set_enabled(sliece_num, false);
+    float counting_rate = clock_get_hz(clk_sys) / 100;
+    float max_possible_count = counting_rate * 0.01;
+    return pwm_get_counter(slice_num) / max_possible_count;
+}
+
+void vTaskRX( void * pvParameters )
 {
     if( cyw43_arch_init() )
     {
@@ -88,11 +110,32 @@ void vTaskRXTask( void * pvParameters )
         for( ;; );
     }
 
-    // READ
-    for( ;; )
-    {
-        assert(pwm_gpio_to_channel(gpio) == PWM_CHAN_B);
-    uint slice_num = pwm_gpio_to_sliece_num(gpio);
+    // get reading from each pin
+    for( ;; ){
+        for( int i = 0; i < 2; i++ )
+        {
+            // ready pin
+            float measured_duty_cycle1 = measure_duty_cycle(i);
+            float measured_duty_cycle2 = measure_duty_cycle(i);
+            // take action based on reading
+
+            float pin_value = measured_duty_cycle1 > measured_duty_cycle2 ? measured_duty_cycle1 : measured_duty_cycle2;
+            pin_value *= 100;
+
+            if( pin_value < 0.1 )
+            {
+                // input turned off, stop motor or servo
+            }
+            else if( pin_value < 10 || pin_value > 20 )
+            {
+                // Input is invalid
+            }
+            else
+            {
+                // change motor status
+            }
+        }
+    }
 }
 
 int main()
