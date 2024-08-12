@@ -41,6 +41,7 @@ target_include_directories(pico_w_freertos_rf PRIVATE
 target_link_libraries(
         pico_w_freertos_rf
         pico_stdlib
+        hardware_pwm
         pico_cyw43_arch_none
         FreeRTOS-Kernel-Heap4
         )
